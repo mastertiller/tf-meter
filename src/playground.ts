@@ -362,6 +362,29 @@ function makeGUI() {
 		player.playOrPause();
 	});
 
+	//reduce button function
+	d3.select("#reduce-button").on("click", function () {
+		// Change the button's content.
+		// userHasInteracted();
+		// deactivateActivateLink(input, d3.mouse(this));
+		// console.log(network.length)
+		// console.log(network[network.length-1].length)
+		let inputLks: Link[];
+		inputLks = network[network.length-1][0].inputLinks
+		for (let i = 0; i < inputLks.length; i++) {
+			if (Math.abs(inputLks[i].weight) < 0.2){
+				inputLks[i].weight = 0;
+				inputLks[i].isDead = true;
+				// updateHoverCard(HoverType.WEIGHT, link, coordinates);
+				totalCapacity = getTotalCapacity(network);
+				updateUI();
+			}
+		}
+		
+
+		// console.log(network[0][0].id);
+	});
+
 	player.onPlayPause(isPlaying => {
 		d3.select("#play-pause-button").classed("playing", isPlaying);
 	});
