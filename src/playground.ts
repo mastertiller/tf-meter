@@ -77,6 +77,16 @@ function scrollTween(offset) {
 	};
 }
 
+let isSearchReduce: boolean = false;
+let networkSnapshot: nn.Node[][];
+let iterSnapshot;
+let nodeList: nn.Node[];
+let trainLossList: Array<number>;
+let currNode = 0;
+let epochStep = 100;
+let trainLossOrigin;
+let lazyThreshold = 0.1;
+
 const RECT_SIZE = 30;
 const BIAS_SIZE = 5;
 const NUM_SAMPLES_CLASSIFY = 500;
@@ -369,6 +379,7 @@ function makeGUI() {
 		// deactivateActivateLink(input, d3.mouse(this));
 		// console.log(network.length)
 		// console.log(network[network.length-1].length)
+		// console.log(network)
 		let inputLks: Link[];
 		inputLks = network[network.length-1][0].inputLinks
 		for (let i = 0; i < inputLks.length; i++) {
@@ -384,6 +395,25 @@ function makeGUI() {
 
 		// console.log(network[0][0].id);
 	});
+
+	d3.select("#search-reduce-button").on("click", function () {
+		initSearchReduce();
+		autoSearch(network);
+	});
+
+	function autoSearch(network: nn.Node[][]){
+		isSearchReduce = true;
+		let iterSnap = iter;
+		for (let layerIdx = 1; layerIdx < network.length - 1; layerIdx++) {
+			let currentLayer = network[layerIdx];
+			for (let i = 0; i < currentLayer.length; i++) {
+				let node = currentLayer[i];
+				nodeList.push(node);
+			}
+		}
+		console.log(nodeList);
+	}
+
 
 	player.onPlayPause(isPlaying => {
 		d3.select("#play-pause-button").classed("playing", isPlaying);
@@ -1542,7 +1572,87 @@ function constructInput(x: number, y: number): number[] {
 	return input;
 }
 
+function removeNode(node: nn.Node){
+	let inputLks = node.inputLinks;
+	for (let i = 0; i < inputLks.length; i++) {
+		inputLks[i].weight = 0;
+		inputLks[i].isDead = true;
+		updateUI();
+	}
+
+	let outputLks = node.outputs
+	for (let i = 0; i < outputLks.length; i++) {
+		outputLks[i].weight = 0;
+		outputLks[i].isDead = true;
+		updateUI();
+	}
+}
+
+function recoverNode(node: nn.Node){
+	console.log(node);
+	let inputLks = node.inputLinks;
+	for (let i = 0; i < inputLks.length; i++) {
+		inputLks[i].isDead = false;
+		updateUI();
+	}
+
+	let outputLks = node.outputs
+	for (let i = 0; i < outputLks.length; i++) {
+		outputLks[i].isDead = false;
+		updateUI();
+	}
+}
+
+function initSearchReduce(){
+	networkSnapshot = network;
+	iterSnapshot = 0;
+	nodeList = [];
+	trainLossList = [];
+	currNode = 0;
+	isSearchReduce = false;
+}
+
+function reduceLazyOne(){
+	let lowestLossIndex;
+	let lowestLoss = 9007199254740991;
+	for (let i = 0; i < trainLossList.length; i++) {
+		if (trainLossList[i] < lowestLoss) {
+			lowestLoss = trainLossList[i];
+			lowestLossIndex = i;
+		}
+	}
+	console.log(trainLossList);
+	console.log(trainLossOrigin);
+	console.log(nodeList);
+	console.log(lowestLossIndex);
+	if (trainLossOrigin > lowestLoss || (lowestLoss - trainLossOrigin) / lowestLoss < lazyThreshold){
+		removeNode(nodeList[lowestLossIndex]);
+	}
+}
+
 function oneStep(): void {
+	if (isSearchReduce) {
+		if (iterSnapshot == 0) {
+			iterSnapshot = iter;
+			trainLossOrigin = getLoss(network, trainData);
+			removeNode(nodeList[currNode]);
+		}
+		if (iter - iterSnapshot > epochStep) {
+			recoverNode(nodeList[currNode++]);
+			trainLossList.push(getLoss(network, trainData));
+			network = networkSnapshot;
+
+			if (currNode >= nodeList.length) {
+				reduceLazyOne();
+				initSearchReduce();
+				updateUI();
+				player.playOrPause();
+			} else {
+				removeNode(nodeList[currNode]);
+				iterSnapshot = iter;
+			}
+		}
+	}
 	iter++;
 	trainData.forEach((point, i) => {
 		let input = constructInput(point.x, point.y);
