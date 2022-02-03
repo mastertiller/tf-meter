@@ -80,7 +80,7 @@ function scrollTween(offset) {
 let isSearchReduce: boolean = false;
 let networkSnapshot: nn.Node[][];
 let iterSnapshot;
-let nodeList: nn.Node[];
+let nodeList: nn.Node[] = [];
 let trainLossList: Array<number>;
 let currNode = 0;
 let epochStep = 100;
@@ -1589,7 +1589,6 @@ function removeNode(node: nn.Node){
 }
 
 function recoverNode(node: nn.Node){
-	console.log(node);
 	let inputLks = node.inputLinks;
 	for (let i = 0; i < inputLks.length; i++) {
 		inputLks[i].isDead = false;
@@ -1603,13 +1602,15 @@ function recoverNode(node: nn.Node){
 	}
 }
 
+function permanentDeleteNode(nodeIndex) {
+	nodeList.splice(nodeIndex, 1);
+}
+
 function initSearchReduce(){
 	networkSnapshot = network;
 	iterSnapshot = 0;
-	nodeList = [];
 	trainLossList = [];
 	currNode = 0;
-	isSearchReduce = false;
 }
 
 function reduceLazyOne(){
@@ -1621,12 +1622,12 @@ function reduceLazyOne(){
 			lowestLossIndex = i;
 		}
 	}
-	console.log(trainLossList);
-	console.log(trainLossOrigin);
-	console.log(nodeList);
-	console.log(lowestLossIndex);
 	if (trainLossOrigin > lowestLoss || (lowestLoss - trainLossOrigin) / lowestLoss < lazyThreshold){
 		removeNode(nodeList[lowestLossIndex]);
+		permanentDeleteNode(lowestLossIndex);
+		console.log("Permanently Delete: " + lowestLossIndex);
+	} else {
+		isSearchReduce = false;
 	}
 }
 
@@ -1637,7 +1638,7 @@ function oneStep(): void {
 			trainLossOrigin = getLoss(network, trainData);
 			removeNode(nodeList[currNode]);
 		}
-		if (iter - iterSnapshot > epochStep) {
+		if (iterSnapshot > 0 && iter - iterSnapshot > epochStep) {
 			recoverNode(nodeList[currNode++]);
 			trainLossList.push(getLoss(network, trainData));
 			network = networkSnapshot;
@@ -1646,7 +1647,7 @@ function oneStep(): void {
 				reduceLazyOne();
 				initSearchReduce();
 				updateUI();
-				player.playOrPause();
+				// player.playOrPause();
 			} else {
 				removeNode(nodeList[currNode]);
 				iterSnapshot = iter;
